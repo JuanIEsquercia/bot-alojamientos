@@ -1,7 +1,14 @@
 FROM php:8.2-apache
 
-# Instalar extensiones necesarias
-RUN docker-php-ext-install curl openssl
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar extensiones PHP necesarias
+RUN docker-php-ext-install curl
+RUN docker-php-ext-configure openssl --with-openssl && docker-php-ext-install openssl || true
 
 # Habilitar mod_rewrite
 RUN a2enmod rewrite
