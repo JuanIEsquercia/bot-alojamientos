@@ -1,0 +1,11 @@
+.git
+.gitignore
+*.md
+bot.log
+test_*.php
+node_modules
+vendor
+.DS_Store
+# IMPORTANTE: NO excluir firebase-credentials.json
+# firebase-credentials.json debe estar en el contenedor
+

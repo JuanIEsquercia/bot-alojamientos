@@ -1,0 +1,9 @@
+.env
+.htaccess
+*.log
+
+# Credenciales de Firebase (NO subir a Git)
+*-firebase-adminsdk-*.json
+firebase-credentials.json
+*firebase*.json
+
