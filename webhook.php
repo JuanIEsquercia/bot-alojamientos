@@ -16,17 +16,12 @@ require_once __DIR__ . '/autoload.php';
 use BotAlojamientos\Bot\WhatsAppBot;
 use BotAlojamientos\Config\Config;
 
-// Configurar logging
+// Configurar logging: SIEMPRE a stderr para ver todo en Cloud Logging y en consola local
 ini_set('log_errors', 1);
+ini_set('error_log', 'php://stderr');
 
-// En producción (Cloud Run), loguear a stderr para que aparezca en Cloud Logging.
-// En desarrollo local, usar bot.log como antes.
-$appEnv = getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? 'development');
-if ($appEnv === 'production') {
-    ini_set('error_log', 'php://stderr');
-} else {
-    ini_set('error_log', __DIR__ . '/bot.log');
-}
+// Marca de vida del webhook
+error_log('PING webhook.php cargado');
 
 // Configurar headers para JSON
 header('Content-Type: application/json');
