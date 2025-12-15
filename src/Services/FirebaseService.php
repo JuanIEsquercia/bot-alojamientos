@@ -22,20 +22,31 @@ class FirebaseService
             throw new Exception('FIREBASE_PROJECT_ID no está configurado');
         }
 
-        if (empty($this->credentialsPath) || !file_exists($this->credentialsPath)) {
-            throw new Exception('GOOGLE_APPLICATION_CREDENTIALS no está configurado o el archivo no existe');
+        if (empty($this->credentialsPath)) {
+            throw new Exception('GOOGLE_APPLICATION_CREDENTIALS no está configurado');
         }
-        
+
         // Validar que el path no contenga path traversal (seguridad)
         $realPath = realpath($this->credentialsPath);
         if ($realPath === false || !file_exists($realPath)) {
             throw new Exception('Ruta de credenciales inválida o no accesible');
         }
-        
-        // Asegurar que el archivo esté dentro del directorio del proyecto
+
+        // Directorio del proyecto (uso local / tradicional)
         $projectRoot = realpath(__DIR__ . '/../..');
-        if (strpos($realPath, $projectRoot) !== 0) {
-            throw new Exception('Ruta de credenciales fuera del directorio del proyecto');
+        // Directorio de secretos en Cloud Run (montaje de Secret Manager)
+        $secretsDir = '/var/secrets';
+
+        $ubicacionValida = false;
+        foreach ([$projectRoot, $secretsDir] as $base) {
+            if ($base && strpos($realPath, $base) === 0) {
+                $ubicacionValida = true;
+                break;
+            }
+        }
+
+        if (!$ubicacionValida) {
+            throw new Exception('Ruta de credenciales fuera de ubicaciones permitidas');
         }
 
         // Cargar credenciales
