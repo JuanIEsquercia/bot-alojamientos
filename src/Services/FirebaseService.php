@@ -410,16 +410,41 @@ class FirebaseService
     {
         try {
             $normalizedPhone = $this->normalizePhoneForUsers($phoneNumber);
+            error_log("🔍 Validando usuario - Número recibido: $phoneNumber, Normalizado: $normalizedPhone");
+            
+            if (empty($normalizedPhone)) {
+                error_log("⚠️ Número normalizado vacío. Número original: $phoneNumber");
+                return null;
+            }
             
             // Obtener todos los usuarios y filtrar (Firestore REST API tiene limitaciones)
             $users = $this->queryFirestore('users');
+            error_log("📊 Total de usuarios obtenidos de Firebase: " . count($users));
             
-            foreach ($users as $user) {
-                $userPhone = $this->normalizePhoneForUsers($user['telefono'] ?? '');
+            if (empty($users)) {
+                error_log("⚠️ No se encontraron usuarios en la colección 'users'");
+                return null;
+            }
+            
+            $comparaciones = [];
+            foreach ($users as $index => $user) {
+                $userPhoneRaw = $user['telefono'] ?? '';
+                $userPhone = $this->normalizePhoneForUsers($userPhoneRaw);
+                
+                $comparaciones[] = "Usuario #$index: Raw='$userPhoneRaw', Normalizado='$userPhone'";
+                
                 if ($userPhone === $normalizedPhone) {
+                    error_log("✅ Usuario encontrado! Email: " . ($user['email'] ?? 'N/A') . ", Status: " . ($user['status'] ?? 'N/A'));
                     return $user;
                 }
             }
+            
+            // Log detallado de todas las comparaciones (solo si no se encontró)
+            error_log("❌ Usuario NO encontrado. Comparaciones realizadas:");
+            foreach ($comparaciones as $comp) {
+                error_log("   - $comp");
+            }
+            error_log("   - Buscado: '$normalizedPhone'");
 
             return null;
         } catch (Exception $e) {
@@ -510,11 +535,21 @@ class FirebaseService
                 return [];
             }
 
-            // Dividir en palabras
+            // Dividir en palabras y filtrar solo las relevantes (4+ caracteres)
             $words = preg_split('/\s+/', $nameClean);
             $words = array_filter($words, function($word) {
-                return strlen($word) >= 2;
+                $word = trim($word);
+                return strlen($word) >= 4; // Solo palabras de 4+ caracteres
             });
+            
+            // Si no hay palabras de 4+, usar palabras de 3+ como fallback
+            if (empty($words)) {
+                $words = preg_split('/\s+/', $nameClean);
+                $words = array_filter($words, function($word) {
+                    $word = trim($word);
+                    return strlen($word) >= 3;
+                });
+            }
 
             if (empty($words)) {
                 return [];
@@ -578,8 +613,18 @@ class FirebaseService
      */
     private function normalizePhoneForUsers(string $phoneNumber): string
     {
+        // Validar entrada
+        if (empty($phoneNumber) || !is_string($phoneNumber)) {
+            return '';
+        }
+        
         // Remover todo excepto números
         $digits = preg_replace('/[^0-9]/', '', $phoneNumber);
+        
+        // Si no hay dígitos, retornar vacío
+        if (empty($digits)) {
+            return '';
+        }
         
         // Tomar los últimos 10 dígitos
         if (strlen($digits) >= 10) {

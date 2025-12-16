@@ -35,6 +35,33 @@ class MessageInterpreter
             ];
         }
         
+        // Validar longitud del mensaje (máximo 5 palabras para búsqueda por nombre)
+        $palabras = preg_split('/\s+/', trim($textoLimpiado));
+        $cantidadPalabras = count(array_filter($palabras, function($palabra) {
+            return !empty(trim($palabra));
+        }));
+        
+        // Si tiene más de 5 palabras y no es solo números, pedir que simplifique
+        if ($cantidadPalabras > 5) {
+            // Verificar si es solo números (DNI o teléfono largo)
+            $soloNumeros = preg_replace('/[^0-9]/', '', $textoLimpiado);
+            $tieneSoloNumeros = !empty($soloNumeros) && strlen($soloNumeros) >= 7;
+            
+            // Si no es solo números, pedir que simplifique
+            if (!$tieneSoloNumeros) {
+                return [
+                    'tipo' => 'error',
+                    'valor' => '',
+                    'mensaje' => "📝 *Mensaje muy largo*\n\n"
+                        . "Enviá solamente el *nombre* para facilitar la búsqueda.\n\n"
+                        . "Podés escribir:\n"
+                        . "• Nombre completo (ej: Juan Pérez)\n"
+                        . "• Un solo nombre (ej: Juan)\n\n"
+                        . "Yo buscaré en la base de datos 🔍"
+                ];
+            }
+        }
+        
         // Extraer números y letras
         $soloNumeros = preg_replace('/[^0-9]/', '', $textoLimpiado);
         $soloLetras = preg_replace('/[^a-z\s]/', '', $textoLimpiado);
@@ -81,9 +108,22 @@ class MessageInterpreter
         
         // CASO B: Solo letras (o letras + espacios)
         if ($tieneLetras && !$tieneNumeros) {
-            $textoLetras = trim($soloLetras);
+            // Extraer solo palabras relevantes (4+ caracteres)
+            $palabras = preg_split('/\s+/', trim($soloLetras));
+            $palabrasRelevantes = array_filter($palabras, function($palabra) {
+                return strlen(trim($palabra)) >= 4;
+            });
             
-            if (strlen($textoLetras) < 3) {
+            // Si no hay palabras de 4+ caracteres, usar todas las palabras de 3+
+            if (empty($palabrasRelevantes)) {
+                $palabrasRelevantes = array_filter($palabras, function($palabra) {
+                    return strlen(trim($palabra)) >= 3;
+                });
+            }
+            
+            $textoFinal = implode(' ', $palabrasRelevantes);
+            
+            if (empty($textoFinal) || strlen($textoFinal) < 3) {
                 return [
                     'tipo' => 'error',
                     'valor' => '',
@@ -93,33 +133,63 @@ class MessageInterpreter
             
             return [
                 'tipo' => 'nombre',
-                'valor' => $textoLetras,
+                'valor' => $textoFinal,
                 'mensaje' => ''
             ];
         }
         
         // CASO C: Alfanumérico (mezcla)
         if ($tieneLetras && $tieneNumeros) {
-            // Intentar ambos: primero números, luego letras
             $longitudNumeros = strlen($soloNumeros);
             
-            $resultado = [
-                'tipo' => 'mixto',
-                'valor' => [
-                    'numeros' => $soloNumeros,
-                    'letras' => trim($soloLetras)
-                ],
-                'mensaje' => ''
-            ];
-            
-            // Determinar tipo de número
+            // PRIORIZAR NÚMEROS: Si hay un DNI o teléfono válido, ignorar el texto
             if ($longitudNumeros >= 7 && $longitudNumeros <= 9) {
-                $resultado['tipo_numeros'] = 'dni';
-            } elseif ($longitudNumeros >= 10) {
-                $resultado['tipo_numeros'] = 'telefono';
+                // DNI válido encontrado - priorizar sobre el texto
+                return [
+                    'tipo' => 'dni',
+                    'valor' => $soloNumeros,
+                    'mensaje' => ''
+                ];
             }
             
-            return $resultado;
+            if ($longitudNumeros >= 10) {
+                // Teléfono válido encontrado - priorizar sobre el texto
+                return [
+                    'tipo' => 'telefono',
+                    'valor' => $soloNumeros,
+                    'mensaje' => ''
+                ];
+            }
+            
+            // Si los números no son válidos (muy cortos), buscar por nombre
+            // Extraer solo palabras relevantes (4+ caracteres)
+            $palabras = preg_split('/\s+/', trim($soloLetras));
+            $palabrasRelevantes = array_filter($palabras, function($palabra) {
+                return strlen(trim($palabra)) >= 4;
+            });
+            
+            // Si no hay palabras de 4+ caracteres, usar todas las palabras de 3+
+            if (empty($palabrasRelevantes)) {
+                $palabrasRelevantes = array_filter($palabras, function($palabra) {
+                    return strlen(trim($palabra)) >= 3;
+                });
+            }
+            
+            $textoFinal = implode(' ', $palabrasRelevantes);
+            if (strlen($textoFinal) >= 3) {
+                return [
+                    'tipo' => 'nombre',
+                    'valor' => $textoFinal,
+                    'mensaje' => ''
+                ];
+            }
+            
+            // Si tampoco hay nombre válido, error
+            return [
+                'tipo' => 'error',
+                'valor' => '',
+                'mensaje' => 'No pude entender tu mensaje. Escribí un Nombre, DNI o Teléfono.'
+            ];
         }
         
         // No se pudo determinar
