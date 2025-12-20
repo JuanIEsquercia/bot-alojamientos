@@ -178,6 +178,7 @@ class WhatsAppService
             $isProduction = getenv('APP_ENV') === 'production' || (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production');
             if ($isProduction) {
                 error_log("❌ WHATSAPP_WEBHOOK_SECRET no configurado en producción");
+                error_log("   Verifica que el secreto esté montado correctamente en Cloud Run");
                 return false;
             }
             // Solo en desarrollo: permitir sin secret
@@ -185,8 +186,21 @@ class WhatsAppService
             return true;
         }
 
-        $expectedSignature = hash_hmac('sha256', $payload, $secret);
+        error_log("🔐 Verificando firma del webhook...");
+        error_log("   Secret configurado: " . (strlen($secret) > 0 ? "Sí (" . strlen($secret) . " caracteres)" : "No"));
+        error_log("   Signature recibida: " . substr($signature, 0, 20) . "...");
         
-        return hash_equals($expectedSignature, $signature);
+        $expectedSignature = hash_hmac('sha256', $payload, $secret);
+        $isValid = hash_equals($expectedSignature, $signature);
+        
+        if (!$isValid) {
+            error_log("❌ Firma NO coincide");
+            error_log("   Expected: " . substr($expectedSignature, 0, 20) . "...");
+            error_log("   Received: " . substr($signature, 0, 20) . "...");
+        } else {
+            error_log("✅ Firma válida");
+        }
+        
+        return $isValid;
     }
 }

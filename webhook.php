@@ -22,6 +22,10 @@ ini_set('error_log', 'php://stderr');
 
 // Marca de vida del webhook
 error_log('PING webhook.php cargado');
+error_log('Request Method: ' . ($_SERVER['REQUEST_METHOD'] ?? 'N/A'));
+error_log('Request URI: ' . ($_SERVER['REQUEST_URI'] ?? 'N/A'));
+error_log('APP_ENV: ' . (getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? 'not set')));
+error_log('X-Hub-Signature-256 header: ' . ($_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? 'not present'));
 
 // Configurar headers para JSON
 header('Content-Type: application/json');
@@ -41,12 +45,21 @@ if (empty($verifyToken)) {
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // Meta envía los parámetros con puntos: hub.mode, hub.verify_token, hub.challenge
     // PHP los convierte a guiones bajos en $_GET, pero también podemos leerlos directamente
-    $mode = $_GET['hub_mode'] ?? $_GET['hub.mode'] ?? '';
-    $token = $_GET['hub_verify_token'] ?? $_GET['hub.verify_token'] ?? '';
-    $challenge = $_GET['hub_challenge'] ?? $_GET['hub.challenge'] ?? '';
+    // Intentar leer de múltiples formas para asegurar compatibilidad
+    $mode = $_GET['hub.mode'] ?? $_GET['hub_mode'] ?? '';
+    $token = $_GET['hub.verify_token'] ?? $_GET['hub_verify_token'] ?? '';
+    $challenge = $_GET['hub.challenge'] ?? $_GET['hub_challenge'] ?? '';
     
-    // Log para debugging
-    error_log("Verificación webhook - Mode: $mode, Token recibido: $token, Token esperado: $verifyToken, Challenge: $challenge");
+    // Log completo para debugging
+    error_log("═══════════════════════════════════════");
+    error_log("🔍 VERIFICACIÓN WEBHOOK (GET)");
+    error_log("Query String: " . ($_SERVER['QUERY_STRING'] ?? 'N/A'));
+    error_log("GET completo: " . json_encode($_GET));
+    error_log("Mode: '$mode'");
+    error_log("Token recibido: '$token'");
+    error_log("Token esperado: '$verifyToken'");
+    error_log("Challenge: '$challenge'");
+    error_log("═══════════════════════════════════════");
 
     if ($mode === 'subscribe' && $token === $verifyToken) {
         // Verificación exitosa
@@ -65,10 +78,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
 // Manejar eventos del webhook (POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Log inmediato cuando se recibe un POST
+    error_log("═══════════════════════════════════════");
+    error_log("📨 POST RECIBIDO EN WEBHOOK");
+    error_log("Timestamp: " . date('Y-m-d H:i:s'));
+    error_log("User-Agent: " . ($_SERVER['HTTP_USER_AGENT'] ?? 'N/A'));
+    error_log("IP: " . ($_SERVER['REMOTE_ADDR'] ?? 'N/A'));
+    error_log("X-Hub-Signature-256: " . ($_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? 'NO PRESENTE'));
+    error_log("APP_ENV: " . (getenv('APP_ENV') ?: ($_ENV['APP_ENV'] ?? 'not set')));
+    error_log("═══════════════════════════════════════");
+    
     try {
         // Obtener el cuerpo de la petición
         $rawBody = file_get_contents('php://input');
+        error_log("Tamaño del body: " . strlen($rawBody) . " bytes");
+        
+        if (empty($rawBody)) {
+            error_log("⚠️ ADVERTENCIA: Body vacío recibido");
+        }
+        
         $data = json_decode($rawBody, true);
+        
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log("❌ ERROR: JSON inválido - " . json_last_error_msg());
+            error_log("Body recibido: " . substr($rawBody, 0, 500));
+        } else {
+            error_log("✅ JSON válido recibido");
+            error_log("Object type: " . ($data['object'] ?? 'unknown'));
+        }
 
         // Verificar la firma del webhook (OBLIGATORIO en producción)
         $signature = $_SERVER['HTTP_X_HUB_SIGNATURE_256'] ?? '';
