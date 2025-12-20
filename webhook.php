@@ -145,13 +145,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Procesar el evento
         if (isset($data['object']) && $data['object'] === 'whatsapp_business_account') {
-            foreach ($data['entry'] ?? [] as $entry) {
-                $changes = $entry['changes'] ?? [];
+            error_log("📊 Información del evento completo:");
+            error_log("   Entry count: " . count($data['entry'] ?? []));
+            
+            foreach ($data['entry'] ?? [] as $entryIndex => $entry) {
+                error_log("   Entry #$entryIndex:");
+                error_log("     ID: " . ($entry['id'] ?? 'N/A'));
+                error_log("     Time: " . ($entry['time'] ?? 'N/A'));
                 
-                foreach ($changes as $change) {
+                $changes = $entry['changes'] ?? [];
+                error_log("     Changes count: " . count($changes));
+                
+                foreach ($changes as $changeIndex => $change) {
+                    error_log("     Change #$changeIndex:");
+                    error_log("       Field: " . ($change['field'] ?? 'N/A'));
+                    
                     $value = $change['value'] ?? [];
                     
-                    // Procesar mensajes
+                    // Identificar de qué número viene el mensaje
+                    $metadata = $value['metadata'] ?? [];
+                    $phoneNumberId = $metadata['phone_number_id'] ?? 'N/A';
+                    $displayPhoneNumber = $metadata['display_phone_number'] ?? 'N/A';
+                    
+                    error_log("       📱 Phone Number ID del evento: $phoneNumberId");
+                    error_log("       📱 Display Phone Number: $displayPhoneNumber");
+                    
+                    // Verificar si es el número de prueba
+                    $config = Config::getInstance();
+                    $configuredPhoneNumberId = $config->get('whatsapp.phone_number_id');
+                    error_log("       📱 Phone Number ID configurado: $configuredPhoneNumberId");
+                    
+                    // Verificar si es número de prueba
+                    $isTestNumber = false;
+                    if (strpos($displayPhoneNumber, '15551855317') !== false || 
+                        strpos($displayPhoneNumber, '1555') !== false) {
+                        $isTestNumber = true;
+                        error_log("       ❌ ADVERTENCIA: El mensaje viene del NÚMERO DE PRUEBA");
+                        error_log("       ❌ Display: $displayPhoneNumber");
+                        error_log("       ❌ Phone Number ID: $phoneNumberId");
+                    } elseif ($phoneNumberId !== 'N/A' && $phoneNumberId !== $configuredPhoneNumberId) {
+                        // Si el Phone Number ID no coincide, puede ser del número de prueba
+                        $isTestNumber = true;
+                        error_log("       ❌ ADVERTENCIA: Phone Number ID no coincide");
+                        error_log("       ❌ Recibido: $phoneNumberId");
+                        error_log("       ❌ Esperado: $configuredPhoneNumberId");
+                    } elseif (strpos($displayPhoneNumber, '3794828380') !== false || 
+                               strpos($displayPhoneNumber, '379482') !== false ||
+                               $phoneNumberId === $configuredPhoneNumberId) {
+                        error_log("       ✅ El mensaje viene del NÚMERO REAL");
+                    }
+                    
+                    // Si es número de prueba, saltar este cambio
+                    if ($isTestNumber) {
+                        error_log("       ⚠️ IGNORANDO mensajes del número de prueba");
+                        continue; // Saltar este change completo
+                    }
+                    
+                    // Procesar mensajes (solo del número real)
                     if (isset($value['messages'])) {
                         foreach ($value['messages'] as $message) {
                             // Solo procesar mensajes de texto entrantes
